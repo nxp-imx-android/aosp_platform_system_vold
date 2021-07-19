@@ -143,6 +143,7 @@ Status cp_startCheckpoint(int retry) {
 namespace {
 
 volatile bool isCheckpointing = false;
+volatile bool isNoBow = false;
 
 volatile bool needsCheckpointWasCalled = false;
 
@@ -198,7 +199,7 @@ Status cp_commitChanges() {
                     return error(EINVAL, "Failed to remount");
                 }
             }
-        } else if (fstab_rec->fs_mgr_flags.checkpoint_blk) {
+        } else if (fstab_rec->fs_mgr_flags.checkpoint_blk && !isNoBow) {
             if (!setBowState(mount_rec.blk_device, "2"))
                 return error(EINVAL, "Failed to set bow state");
         }
@@ -386,7 +387,7 @@ Status cp_prepareCheckpoint() {
             LOG(INFO) << "Trimmed " << range.len << " bytes on " << mount_rec.mount_point << " in "
                       << nanoseconds_to_milliseconds(time) << "ms for checkpoint";
 
-            setBowState(mount_rec.blk_device, "1");
+            isNoBow |= !setBowState(mount_rec.blk_device, "1");
         }
         if (fstab_rec->fs_mgr_flags.checkpoint_blk || fstab_rec->fs_mgr_flags.checkpoint_fs) {
             std::thread(cp_healthDaemon, std::string(mount_rec.mount_point),
