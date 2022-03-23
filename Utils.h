@@ -27,6 +27,7 @@
 
 #include <chrono>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct DIR;
@@ -36,7 +37,7 @@ namespace vold {
 
 static const char* kVoldAppDataIsolationEnabled = "persist.sys.vold_app_data_isolation_enabled";
 static const char* kExternalStorageSdcardfs = "external_storage.sdcardfs.enabled";
-static const char* kFuseBpfEnabled = "persist.sys.fuse.bpf.enable";
+static const char* kFuseBpfEnabled = "persist.sys.fuse.bpf.override";
 
 static constexpr std::chrono::seconds kUntrustedFsckSleepTime(45);
 
@@ -149,14 +150,14 @@ std::string BuildDataSystemLegacyPath(userid_t userid);
 std::string BuildDataSystemCePath(userid_t userid);
 std::string BuildDataSystemDePath(userid_t userid);
 std::string BuildDataMiscLegacyPath(userid_t userid);
-std::string BuildDataMiscCePath(userid_t userid);
-std::string BuildDataMiscDePath(userid_t userid);
 std::string BuildDataProfilesDePath(userid_t userid);
 std::string BuildDataVendorCePath(userid_t userid);
 std::string BuildDataVendorDePath(userid_t userid);
 
 std::string BuildDataPath(const std::string& volumeUuid);
 std::string BuildDataMediaCePath(const std::string& volumeUuid, userid_t userid);
+std::string BuildDataMiscCePath(const std::string& volumeUuid, userid_t userid);
+std::string BuildDataMiscDePath(const std::string& volumeUuid, userid_t userid);
 std::string BuildDataUserCePath(const std::string& volumeUuid, userid_t userid);
 std::string BuildDataUserDePath(const std::string& volumeUuid, userid_t userid);
 
@@ -174,7 +175,6 @@ bool Readlinkat(int dirfd, const std::string& path, std::string* result);
 // Handles dynamic major assignment for virtio-block
 bool IsVirtioBlkDevice(unsigned int major);
 
-status_t UnmountTreeWithPrefix(const std::string& prefix);
 status_t UnmountTree(const std::string& mountPoint);
 
 bool IsDotOrDotDot(const struct dirent& ent);
@@ -205,6 +205,18 @@ status_t UnmountUserFuse(userid_t userId, const std::string& absolute_lower_path
                          const std::string& relative_upper_path);
 
 status_t PrepareAndroidDirs(const std::string& volumeRoot);
+
+// Open a given directory as an FD, and return that and the corresponding procfs virtual
+// symlink path that can be used in any API that accepts a path string. Path stays valid until
+// the directory FD is closed.
+//
+// This may be useful when an API wants to restrict a path passed from an untrusted process,
+// and do it without any TOCTOU attacks possible (e.g. where an attacker replaces one of
+// the components with a symlink after the check passed). In that case opening a path through
+// this function guarantees that the target directory stays the same, and that it can be
+// referenced inside the current process via the virtual procfs symlink returned here.
+std::pair<android::base::unique_fd, std::string> OpenDirInProcfs(std::string_view path);
+
 }  // namespace vold
 }  // namespace android
 
